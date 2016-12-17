@@ -104,7 +104,8 @@ ENV/
 .RData
 
 # Data files
-.RDS
+**/*.rds
+**/*.RDS
 
 # Example code in package build process
 *-Ex.R
