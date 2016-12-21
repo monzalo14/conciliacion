@@ -1,7 +1,0 @@
-source('0_load_data.R')
-source('1_clean_data.R')
-source('2_clean_data.R')
-source('3_clean_data.R')
-#source('4_pini.R')
-source('5_expand.R')
-source('6_select.R')
