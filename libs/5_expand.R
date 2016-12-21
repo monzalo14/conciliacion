@@ -70,9 +70,9 @@ enoe_giros$freq[nrow(enoe_giros)] <-  enoe_giros$freq[nrow(enoe_giros)]
 enoe_giros$freq <- enoe_giros$freq*nrow(df)
 
 # Sin embargo, necesitamos alterar el tamaño de la base:
-df$giro_empresa[df$giro_empresa == '31'] <- '33'
-df$giro_empresa[df$giro_empresa == '32'] <- '33'
-df$giro_empresa[df$giro_empresa == '48'] <- '49'
+# df$giro_empresa[df$giro_empresa == '31'] <- '33'
+# df$giro_empresa[df$giro_empresa == '32'] <- '33'
+# df$giro_empresa[df$giro_empresa == '48'] <- '49'
 df_giros <- plyr::count(df$giro_empresa) %>%
             mutate(x = as.character(x))
 names(df_giros) <- c('giro','df_freq')
