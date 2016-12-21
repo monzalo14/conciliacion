@@ -1,0 +1,100 @@
+---
+title: "Modelos lineales para conciliación pre-judicial"
+author: "Mónica Zamudio"
+date: "5 de noviembre de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+
+library(tidyverse)
+library(tab)
+library(knitr)
+library(lmtest)
+library(sandwich)
+library(gmodels)
+library(dummies)
+
+source("../lib/tabglm2.R")
+```
+
+```{r}
+df <- readRDS("../clean_data/observaciones.RDS")
+```
+
+**Nota: Las cantidades están truncadas al 99 percentil, separando por modo de término
+
+```{r}
+trunca99 <- function(x){
+  cuantil99 <- quantile(x, .99, na.rm=T, type=1)
+  x [x>cuantil99] <- cuantil99
+  x
+}
+
+df_exp <- group_by(df, modo_termino) %>% 
+  mutate_each(funs(trunca99), liq_total, liq_total_tope) %>%
+  data.frame(.) %>%
+  dummy.data.frame(names=c("junta", "giro_empresa"))
+ 
+totales <- sapply(df_exp[grep("giro_empresa", names(df_exp))], sum)
+totales_drop <- totales[totales<40]
+
+df_exp <- mutate(df_exp, giro_empresa99 = sum(df_exp[names(totales_drop)], na.rm=T)) %>%
+      select(., -one_of(names(totales_drop)))
+
+tabula_modelo <- function(modelo){
+print(paste0("R2: ", 1-modelo$deviance/modelo$null.deviance))
+tabla <- cbind(tabglm2(modelo, n=T),coeftest(modelo, vcov = vcovHC(modelo, "HC1"))[, 4])
+colnames(tabla)[6] <- "P (robust)"
+kable(tabla, rownames=F)
+}
+
+giros <- select(df_exp, starts_with("giro")) %>% names(.) 
+
+formula_conv <- paste("liq_total ~ gen + antig + sueldo + horas_sem + trabajador_base + reinst + hextra + reclutamiento + ", paste(giros, collapse = "+")) %>% as.formula(.)
+
+formula_laudos <- paste("liq_total_tope ~ gen + antig + sueldo + horas_sem + trabajador_base + reinst + hextra + reclutamiento + ", paste(giros, collapse = "+")) %>% as.formula(.)
+```
+
+## Convenios
+```{r}
+filter(df_exp, per_horas==3, modo_termino==1) %>%
+glm(formula_conv, data=.) %>%
+tabula_modelo(.)
+```
+
+## Laudo
+```{r}
+filter(df_exp, per_horas==3, modo_termino==3) %>%
+glm(formula_laudos, data=.) %>%
+tabula_modelo(.)
+```
+
+## Laudo con pago
+```{r}
+filter(df_exp, per_horas==3, modo_termino==3, liq_total_tope>0) %>%
+glm(formula_laudos, data=.) %>%
+tabula_modelo(.)
+```
+
+##### Varias preguntas aquí: 
+1. Ideas para giros:
+  * Revisar qué datos tiene INEGI por código SCIAN para hacer match con los giros    que existen en nuestros datos 
+  * Palabras claves para operadores del experimento
+  * Retroalimentación del razonamiento de los mismos operadores
+2. Preguntas para dummy de reclutamiento
+3. ¿Regularización? ¿Best Subset? 
+
+#### Pendientes:
+1. Cambiar truncada a 99 de laudos/convenios en nuestro código
+2. Selección de variables:
+  - Joyce selecciona manualmente variables rescatables
+  - Mónica utiliza técnicas de selección de variables para modelos lineales; Mauricio vuelve a correr Random Forests con lo rescatable
+3. Limpiar nombres de demandados
+  - El equipo limpia nombres
+  - Mónica investiga nombres de físicos
+  - Usar datos de 2016 para encontrar nuevos jugadores y tirar a viejos, y ajustar nuestras dummies de "muy demandado" (propuesta: cortar después del puente de noviembre)
+4. Captura de giros
+5. Duraciones (ver los resultados que sacaron de la base histórica. Conjetura: nos va mejor con la media)
+

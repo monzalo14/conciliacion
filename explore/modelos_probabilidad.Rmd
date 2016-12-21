@@ -1,0 +1,74 @@
+---
+title: "Modelos de Probabilidad"
+author: "Mónica Zamudio"
+date: "21 de diciembre de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(e1071)
+library(unbalanced)
+library(randomForest)
+```
+
+Usamos la metodología *SMOTE* para tener un dataset balanceado:
+```{r}
+# df_laudo <- readRDS('../clean_data/observaciones_selected_laudos.RDS')
+listas <- ubSMOTE(dplyr::select(df_laudo, -laudo_gana), 
+                df_laudo$laudo_gana, perc.over = 200, k = 5, 
+                perc.under = 200, verbose = TRUE)
+X <- listas$X %>% na.roughfix()
+Y <- listas$Y %>% na.roughfix()
+```
+
+Para ambos modelos haremos 5-fold cross-validation, con 80-20:
+```{r}
+smp_size <- floor(0.80 * nrow(X))
+```
+
+Calibramos un Random Forest, haciendo 5-fold cross-validation:
+```{r}
+errores_RF <- NULL
+
+for (fold in (1:5)){
+train_ind <- sample(seq_len(nrow(X)), size = smp_size, replace = FALSE)
+
+X_train <- X[train_ind, ]
+X_test  <- X[-train_ind, ]
+
+Y_train <- Y[train_ind]
+Y_test  <- Y[-train_ind]
+
+RF <- tune.randomForest(X_train, Y_train, ntree = c(900, 1000, 1100, 1200, 1300, 1400, 1500))
+
+RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
+prediccion <- predict(RF_best, X_test)
+errores[fold] <- length(which(prediccion != Y_test))/length(Y_test)
+}
+
+mean(errores_RF)
+```
+
+Calibramos un SVM, haciendo 5-fold cross-validation:
+```{r}
+errores_SVM <- NULL
+
+for (fold in (1:5)){
+train_ind <- sample(seq_len(nrow(X)), size = smp_size, replace = FALSE)
+
+X_train <- X[train_ind, ]
+X_test  <- X[-train_ind, ]
+
+Y_train <- Y[train_ind]
+Y_test  <- Y[-train_ind]
+
+SVM <- tune.svm(X_train, Y_train)
+prediccion <- predict(SVM_best, X_test)
+errores[fold] <- length(which(prediccion != Y_test))/length(Y_test)
+}
+
+mean(errores_RF)
+```
+
