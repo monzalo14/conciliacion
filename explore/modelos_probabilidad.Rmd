@@ -11,64 +11,151 @@ library(dplyr)
 library(e1071)
 library(unbalanced)
 library(randomForest)
+library(FNN)
 ```
 
-Usamos la metodología *SMOTE* para tener un dataset balanceado:
+```{r, echo = F}
+df_laudo <- readRDS('../clean_data/observaciones_selected_laudos.RDS') %>% 
+  select(-modo_termino, -giro_empresa_23)
+```
+
+Vamos a ver qué tan desbalanceados están nuestros giros:
 ```{r}
-# df_laudo <- readRDS('../clean_data/observaciones_selected_laudos.RDS')
-listas <- ubSMOTE(dplyr::select(df_laudo, -laudo_gana), 
-                df_laudo$laudo_gana, perc.over = 200, k = 5, 
-                perc.under = 200, verbose = TRUE)
+select(df_laudo, starts_with('giro')) %>%
+sapply(sum) -> giros
+giros
+```
+
+Esto no nos va a funcionar muy bien: tenemos algunos giros que no están representados en nuestra muestra de laudos. Mi propuesta: colapsar algunos giros. La razón principal que considero es que algunos de estos métodos trabajan mucho mejor con datos escalados, y no es posible escalar una constante.
+```{r}
+quita <- giros[giros < 5] %>% names()
+df_laudo <- df_laudo %>%
+            mutate(giro_empresa_00 = rowSums(df_laudo[names(df_laudo) %in% quita])) %>%
+            select(-one_of(quita[-1]))
+```
+
+Usamos la metodología *SMOTE* para tener un dataset balanceado (vamos a sobrerrepresentar algunos casos ganadores y subrepresentar algunos casos perdedores):
+```{r}
+select(df_laudo, -laudo_gana) %>% 
+ubSMOTE(., df_laudo$laudo_gana, perc.over = 200, k = 5, 
+perc.under = 200, verbose = TRUE) -> listas
+
 X <- listas$X %>% na.roughfix()
 Y <- listas$Y %>% na.roughfix()
 ```
 
-Para ambos modelos haremos 5-fold cross-validation, con 80-20:
+## Comparación entre modelos
+
+Vamos a usar un método llamada *grid search*, que consiste en la búsqueda automatizada de la mejor selección de hiperparámetros, dada cierta familia de modelos. El método consiste en lo siguiente:
+
+  1. Hacemos una "malla" que contenga todos los vectores del espacio hiper-parametral $\Omega$.
+  
+  2. Tomemos un vector de parámetros $\theta_0 \in \Omega$. Sea $i \in \{1, 2, ... 10 \}$ Para cada $i$, tomamos **el training dataset** y lo dividimos en $T_i$ y $V_i$. Calibramos un modelo con parámetros $\theta_0$ y datos $T_i$, y medimos el ajuste prediciendo $V_i$.
+  
+  3. Almacenamos la media y desviación estándar de los errores (esto realmente es la proporción de casos en $V_i$ en los que nos equivocamos). Notemos que ya estamos midiendo el ajuste fuera de muestra del modelo desde esta etapa del proceso.
+  
+  4. Repetimos los pasos **2.** y **3.** para cada posible $\theta$.
+  
+  5. Finalmente, comparamos los distintos vectores de hiperparámetros usando como criterio el ajuste fuera de muestra (la media de los errores que ya almacenamos).
+
+Tiene sentido preguntarse porqué dejamos una parte de los datos fuera de este tipo de procedimientos. No estamos asumiendo ninguna forma funcional que podamos sustentar en teoría económica, simplemente estamos escogiendo modelos a partir de su poder predictivo, por lo que no tenemos ningún otro recurso para comparar entre ellos. Al ser algoritmos altamente no lineales, debemos asegurarnos de no estar sobreajustando el modelo, por lo que es necesario dejar una parte de los datos completamente fuera de la calibración para probar la capacidad de generalización de estos, y poder así comparar sin sesgos de selección.
+
 ```{r}
+set.seed(140693)
 smp_size <- floor(0.80 * nrow(X))
-```
-
-Calibramos un Random Forest, haciendo 5-fold cross-validation:
-```{r}
-errores_RF <- NULL
-
-for (fold in (1:5)){
 train_ind <- sample(seq_len(nrow(X)), size = smp_size, replace = FALSE)
-
 X_train <- X[train_ind, ]
 X_test  <- X[-train_ind, ]
-
 Y_train <- Y[train_ind]
 Y_test  <- Y[-train_ind]
+```
 
+Vamos a comparar entre tres familias de algoritmos: 
+
+- Random Forest
+- Support Vector Machines
+- K-Nearest Neighbours
+
+### Random Forest
+
+Para este método, lo más común es probar sobre distintos valores posibles para el número de árboles. Las funciones *tune.model()*, en R, son implementaciones muy buenas del método de *Grid Search:*
+```{r}
 RF <- tune.randomForest(X_train, Y_train, ntree = c(900, 1000, 1100, 1200, 1300, 1400, 1500))
-
-RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
-prediccion <- predict(RF_best, X_test)
-errores[fold] <- length(which(prediccion != Y_test))/length(Y_test)
-}
-
-mean(errores_RF)
 ```
 
-Calibramos un SVM, haciendo 5-fold cross-validation:
+
+Veamos cómo le fue a los distintos modelos. En esta tabla, para cada combinación de hiperparámetros, vamos a encontrar la media y desviación estándar de la proporción de casos en los que nos equivocamos:
 ```{r}
-errores_SVM <- NULL
-
-for (fold in (1:5)){
-train_ind <- sample(seq_len(nrow(X)), size = smp_size, replace = FALSE)
-
-X_train <- X[train_ind, ]
-X_test  <- X[-train_ind, ]
-
-Y_train <- Y[train_ind]
-Y_test  <- Y[-train_ind]
-
-SVM <- tune.svm(X_train, Y_train)
-prediccion <- predict(SVM_best, X_test)
-errores[fold] <- length(which(prediccion != Y_test))/length(Y_test)
-}
-
-mean(errores_RF)
+summary(RF)
 ```
 
+
+Ahora, usamos el conjunto de prueba para comprobar el la capacidad de generalización de nuestro modelo:
+```{r}
+RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
+prediccion_RF <- predict(RF_best, X_test)
+errores <- list()
+errores['RF'] <- length(which(prediccion_RF != Y_test))/length(Y_test)
+```
+
+### SVMs
+
+Para este tipo de modelos, existen distintos tipos de algoritmos de clasificación que se pueden usar (de hecho, SVMs pueden ser usadas también en problemas de regresión). El más usado (y que tiene mejores resultados en problemas de clasificación) es el llamado *C-classification*^1^. Es el más popular porque no implica elegir tantos parámetros, y logra muy buen desempeño en problemas que no tienen demasiados datos.
+
+
+Las SVMs son algoritmos que buscan separar linealmente a los puntos de distintas clases. El problema es que, naturalmente, no siempre las clases son linealmente separables en el espacio en el que se está trabajando. Lo que hacen estos algoritmos es, a través de cierta función *kernel*, proyectan los puntos a un espacio de dimensión mayor, en el que sí puedan encontrar un hiperplano que separe a las clases. A menos de que uno tenga un prior muy claro sobre ciertos aspectos de la distribución entre las variables, o sobre detalles muy finos sobre el problema a predecir, lo que se recomienda es probar uno o dos kernels. Después de haber leído un poco sobre esto, encontré que los kernels lineales y polinomiales son usados en general cuando se tienen muchos datos y por ende una transformación no lineal es demasiado cara computacionalmente, o cuando no nos interesa hacer smoothing (por ejemplo, en análisis de texto no estructurado), y que el más usado y que tiene mejores resultados con algoritmos de **SVM** es un kernel llamado **RBF: Radial Basis Factors**. Hice algunas pruebas con otros dos, y decidí quedarme con ese, que es calculado a través de la siquiente fórmula: $K(u,v) = exp(-\gamma |u-v|^2)$, donde $u,v$ son vectores que representan dos variables distintas. Por su forma funcional, **RBF** se intepreta como una medida de similaridad entre variables, y le da cierto peso a tener suavidad en la clasificación. 
+
+Habiendo tomado estas decisiones, necesitamos encontrar el parámetro $\gamma$ y la "penalización" por forzar demasiado esa linearidad, al que llamaremos $C$.
+
+Para esto, volveremos a usar *grid search:*
+```{r}
+SVM <- tune.svm(X_train, Y_train, cost = c(100, 150, 1000), gamma = c(0.1, 0.4, 1))
+```
+
+
+Veamos cómo le fue a nuestros distintos modelos:
+```{r}
+summary(SVM)
+```
+
+
+Ahora, usamos el conjunto de prueba para comprobar el ajuste de nuestro modelo:
+```{r}
+SVM_best <- svm(X_train, Y_train, cost = SVM$best.parameters[[2]], 
+                gamma = SVM$best.parameters[[1]])
+prediccion_SVM <- predict(SVM_best, X_test)
+errores['SVM'] <- length(which(prediccion_SVM != Y_test))/length(Y_test)
+```
+
+^1^ Para cualquier consideración sobre otros tipos de clasificación y sus diferencias, [aquí](ftp://cran.r-project.org/pub/R/web/packages/e1071/vignettes/svmdoc.pdf) es un buen lugar para empezar.
+
+### KNN
+Por último, vamos a probar *KNN*. Este algoritmo no asume absolutamente nada sobre la distribución de los datos: simplemente calcula distancias y toma los puntos más cercanos, por lo que el único hiperparámetro que necesitamos es el número de puntos que va a tomar.
+
+Primero, buscamos cuál es el mejor número de vecinos:
+```{r}
+KNN <- tune.knn(X_train, Y_train, k = 1:10)
+```
+
+Revisamos cómo le fue a los distintos modelos en Cross-Validation:
+```{r}
+summary(KNN)
+```
+
+Y ahora, tomamos `r KNN$best.parameters[[1]]` vecinos cercanos para predecir sobre el test data:
+```{r}
+prediccion_KNN  <- knn(X_train, X_test, Y_train, k = KNN$best.parameters[[1]])
+errores['KNN'] <- length(which(prediccion_KNN != Y_test))/length(Y_test)
+```
+
+Comparemos ahora cómo le fue a cada familia de modelos contra el conjunto de prueba:
+```{r}
+errores
+```
+
+### En conclusión
+Podemos entonces descartar *KNN*; su ajuste es bastante peor que los otros dos, y nos queda solamente decidirnos entre *SVM* y *RF*. 
+
+De entrada, me gustaría subrayar que ningún algoritmo toma significativamente más tiempo que el otro, para nuestra base de laudos. Por otro lado, en las iteraciones que he corrido, ambos han ganado más o menos el mismo número de veces. A pesar de que *SVM* le ha ganado varias veces, me parece que la diferencia no es significativa y *RF* tiene la ventaja de ser un poquito más interpretable y robusto a outliers (cualquier duda que pueda aclarar al respecto de esto último, quedo al pendiente). 
+
+Espero sus comentarios. 
