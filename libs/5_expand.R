@@ -1,3 +1,5 @@
+# Este código sólo queda de referencia, pero no lo vamos a usar; demasiadas diferencias en la distribución
+
 # Leemos nuestros datos y la ENOE, seleccionando sólo las encuestas de la Ciudad de México
 
 df <- readRDS('../clean_data/observaciones.RDS') %>% 
