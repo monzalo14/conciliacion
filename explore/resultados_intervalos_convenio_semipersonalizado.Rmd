@@ -31,13 +31,10 @@ De la base de los 5000 expedientes se tomaron aquellos casos que terminaron en c
 Posteriormente, para cada uno de los cuatro datasets resultantes se partió aleatoriamente en base de entrenamiento (50%) y base de prueba (50%). Con la base de entrenamiento, se utilizaron los coeficientes obtenidos anteriormente para calcular los días de salario obtenidos en el convenio. Dichos resultados fueron ubicados en la distribución real de días de salario obtenidos en convenio pero de la base de prueba (el otro 50%). Este procedimiento se realizó mil veces para cada grupo. 
 
 ## Resultados de grupo menor a la mediana en salario y menor a la mediana en antigüedad
-```{r, results='asis'}
-cov <- vcovHC(reg_conv11, type = "HC")
-robust.se <- sqrt(diag(cov))
-```
-
 
 ```{r,  results='asis'}
+cov <- vcovHC(reg_conv11, type = "HC")
+robust.se <- sqrt(diag(cov))
 stargazer(reg_conv11, reg_conv11, se=list(NULL, robust.se),
 column.labels=c("default","robust"), align=TRUE)
 ```
@@ -49,8 +46,11 @@ sapply(cvi_11, mean)
 ```
 
 ## Resultados de grupo mayor a la mediana en salario y menor a la mediana en antigüedad
-```{r}
-stargazer(reg_conv21)
+```{r,  results='asis'}
+cov <- vcovHC(reg_conv21, type = "HC")
+robust.se <- sqrt(diag(cov))
+stargazer(reg_conv21, reg_conv21, se=list(NULL, robust.se),
+column.labels=c("default","robust"), align=TRUE)
 ```
 
 Se utilizó como "pivote" la mediana y simétricamente calculamos los intervalos para poder capturar el 51% de la distribución. Los resultados que se presentan son los promedios de los resultados obtenidos en cada una de mil las realizaciones. El resultado "porcentaje_intervalo" es el porcentaje promedio de los datos entrenados que caen dentro del intervalo de la distribución de prueba. 
@@ -60,8 +60,11 @@ sapply(cvi_21, mean)
 
 
 ## Resultados de grupo menor a la mediana en salario y mayor a la mediana en antigüedad
-```{r}
-stargazer(reg_conv31)
+```{r,  results='asis'}
+cov <- vcovHC(reg_conv31, type = "HC")
+robust.se <- sqrt(diag(cov))
+stargazer(reg_conv31, reg_conv31, se=list(NULL, robust.se),
+column.labels=c("default","robust"), align=TRUE)
 ```
 
 Se utilizó como "pivote" la mediana y simétricamente calculamos los intervalos para poder capturar el 51% de la distribución. Los resultados que se presentan son los promedios de los resultados obtenidos en cada una de mil las realizaciones. El resultado "porcentaje_intervalo" es el porcentaje promedio de los datos entrenados que caen dentro del intervalo de la distribución de prueba. 
@@ -71,8 +74,11 @@ sapply(cvi_31, mean)
 
 
 ## Resultados de grupo mayor a la mediana en salario y mayor a la mediana en antigüedad
-```{r}
-stargazer(reg_conv41)
+```{r,  results='asis'}
+cov <- vcovHC(reg_conv41, type = "HC")
+robust.se <- sqrt(diag(cov))
+stargazer(reg_conv41, reg_conv41, se=list(NULL, robust.se),
+column.labels=c("default","robust"), align=TRUE)
 ```
 
 
