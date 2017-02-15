@@ -1,0 +1,68 @@
+---
+title: "Modelo laudo definitivo"
+author: "Sebastián Cano"
+date: "8 de febrero de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, error = FALSE, message = FALSE)
+library(knitr)
+library(lmtest)
+library(sandwich)
+library(gmodels)
+library(dummies)
+library(dplyr)
+library(tab)
+
+df_exp2 <- readRDS("../clean_data/observaciones.RDS")
+source("../explore/cv_plot.R")
+load("../explore/cv_resultados.RData") 
+
+```
+
+### Modelo para la calculadora pero con sustitución de top despacho por top demandado, eliminación de utilidades y sustitución de juntas por giros de un dígito
+```{r}
+reg_0 <- filter(df_exp2, modo_termino==3 & liq_total_tope>1) %>% 
+         glm(liq_total_tope ~ c_antiguedad +c_indem +c_rec20 + top_dem +c_recsueldo + gen +codem +
+            giro_4 + giro_5 + giro_6+ giro_7, data=.)
+kable(tabglm(reg_0))
+```
+```{r}
+N <- length(reg_0$y)
+R2 <- 1-reg_0$deviance/reg_0$null.deviance
+F.stat <- ((reg_0$null.deviance-reg_0$deviance)/(length(reg_0$coefficients)-1))/((reg_0$deviance)/(length(reg_0$y)-length(reg_0$coefficients)))
+stats <- cbind(N, R2, F.stat)
+kable(stats, digits = 4)
+```
+
+Valores p bajo heterocedasticidad
+```{r}
+kable(t(coeftest(reg_0, vcov = vcovHC(reg_0, "HC1")) [, 4]), digits = 2, align='l')
+```
+
+Media de los residuales:
+```{r, echo=FALSE}
+mean(cv_l31$liq_total - cv_l31$pred_liq_total, na.rm=T)
+```
+
+Correlación entre Y y Y_gorro:
+```{r, echo=FALSE}
+cor(cv_l31$liq_total, cv_l31$pred_liq_total, use = "pairwise.complete.obs")
+```
+
+Distribución de los residuales: (Y - Y_gorro) 
+```{r, echo=FALSE}
+dist_res(cv_l31)
+```
+
+Media de los residuales al cuadrado:
+```{r, echo=FALSE}
+mean((cv_l31$liq_total - cv_l31$pred_liq_total)^2, na.rm=T)
+```
+
+Distribución de los residuales al cuadrado: (Y - Y_gorro)^2 
+```{r, echo=FALSE}
+dist_res2(cv_l31)
+```
+

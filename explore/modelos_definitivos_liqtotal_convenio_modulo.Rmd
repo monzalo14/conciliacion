@@ -1,0 +1,124 @@
+---
+title: "Modelos definitivos para liquidación total (módulo de conciliación)"
+author: "Sebastián Cano"
+date: "25 de enero de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, error = FALSE, message = FALSE)
+library(knitr)
+library(lmtest)
+library(sandwich)
+library(gmodels)
+library(dummies)
+library(dplyr)
+library(tab)
+
+df_exp2 <- readRDS("../clean_data/observaciones.RDS")
+source("../explore/cv_plot.R")
+load("../explore/cv_resultados.RData") 
+
+```
+
+## Modelo liquidación total en convenio
+```{r}
+reg_0 <- filter(df_exp2, modo_termino==1) %>%  
+          glm(liq_total_tope ~  c_antiguedad + hextra + sueldo + rec20 + c_indem + 
+          gen+ top_dem + giro_empresa00 + giro_empresa22+ giro_empresa31 + giro_empresa32 +
+          giro_empresa33 + giro_empresa43 + giro_empresa46 + giro_empresa48 + giro_empresa49 +
+          giro_empresa51 + giro_empresa52 + giro_empresa53 + giro_empresa54 + giro_empresa55 +
+          giro_empresa56 + giro_empresa61 + giro_empresa62 + giro_empresa71 + giro_empresa72  , data=.)
+kable(tabglm(reg_0))
+```
+```{r}
+N <- length(reg_0$y)
+R2 <- 1-reg_0$deviance/reg_0$null.deviance
+F.stat <- ((reg_0$null.deviance-reg_0$deviance)/(length(reg_0$coefficients)-1))/((reg_0$deviance)/(length(reg_0$y)-length(reg_0$coefficients)))
+stats <- cbind(N, R2, F.stat)
+kable(stats, digits = 4)
+```
+
+Valores p bajo heterocedasticidad
+```{r}
+kable(t(coeftest(reg_0, vcov = vcovHC(reg_0, "HC1")) [, 4]), digits = 2, align='l')
+```
+
+## Metodología para el Cross Validation
+
+Mil veces se particionó aleatoriamente la muestra en dos submuestras: muestra de entrenamiento (70% de la muestra original) y muestra de prueba (30% de la muestra original). Con la muestra de entrenamiento se corrió (entrenó) el modelo X y, dadas las betas obtenidas, se obtuvieron las Y_gorro con la muestra de prueba. Posteriormente, se obtuvieron los siguientes resultados por cada modelo.
+
+Media de los residuales:
+```{r, echo=FALSE}
+mean(cv_convenio$liq_total - cv_convenio$pred_liq_total, na.rm=T)
+```
+
+Correlación entre Y y Y_gorro:
+```{r, echo=FALSE}
+cor(cv_convenio$liq_total, cv_convenio$pred_liq_total, use = "pairwise.complete.obs")
+```
+
+Distribución de los residuales: (Y - Y_gorro) 
+```{r, echo=FALSE}
+dist_res(cv_convenio)
+```
+
+Media de los residuales al cuadrado:
+```{r, echo=FALSE}
+mean((cv_convenio$liq_total - cv_convenio$pred_liq_total)^2, na.rm=T)
+```
+
+Distribución de los residuales al cuadrado: (Y - Y_gorro)^2 
+```{r, echo=FALSE}
+dist_res2(cv_convenio)
+```
+
+
+## Modelo liquidación total en convenio (versión logarítmica)
+```{r}
+reg_0 <- filter(df_exp2, modo_termino==1) %>%  
+          glm(ln_liq_total ~  ln_c_antiguedad+ hextra + ln_sueldo+ rec20 +ln_c_indem + 
+          gen + top_dem + giro_empresa00 + giro_empresa22 + giro_empresa31 + giro_empresa32 +
+          giro_empresa33 + giro_empresa43 + giro_empresa46 + giro_empresa48 + giro_empresa49 +
+          giro_empresa51 + giro_empresa52 + giro_empresa53 + giro_empresa54 + giro_empresa55 +
+          giro_empresa56 + giro_empresa61 + giro_empresa62 + giro_empresa71 + giro_empresa72  , data=.)
+kable(tabglm(reg_0))
+```
+```{r}
+N <- length(reg_0$y)
+R2 <- 1-reg_0$deviance/reg_0$null.deviance
+F.stat <- ((reg_0$null.deviance-reg_0$deviance)/(length(reg_0$coefficients)-1))/((reg_0$deviance)/(length(reg_0$y)-length(reg_0$coefficients)))
+stats <- cbind(N, R2, F.stat)
+kable(stats, digits = 4)
+```
+
+Valores p bajo heterocedasticidad
+```{r}
+kable(t(coeftest(reg_0, vcov = vcovHC(reg_0, "HC1")) [, 4]), digits = 2, align='l')
+```
+
+Media de los residuales:
+```{r, echo=FALSE}
+mean(cv_convenio_log$liq_total - cv_convenio_log$pred_liq_total, na.rm=T)
+```
+
+Correlación entre Y y Y_gorro:
+```{r, echo=FALSE}
+cor(cv_convenio_log$liq_total, cv_convenio_log$pred_liq_total, use = "pairwise.complete.obs")
+```
+
+Distribución de los residuales: (Y - Y_gorro) 
+```{r, echo=FALSE}
+dist_res(cv_convenio_log)
+```
+
+Media de los residuales al cuadrado:
+```{r, echo=FALSE}
+mean((cv_convenio_log$liq_total - cv_convenio_log$pred_liq_total)^2, na.rm=T)
+```
+
+Distribución de los residuales al cuadrado: (Y - Y_gorro)^2 
+```{r, echo=FALSE}
+dist_res2(cv_convenio_log)
+```
+
