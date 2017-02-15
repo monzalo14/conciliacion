@@ -1,0 +1,78 @@
+---
+title: "Intervalos de liquidación total para convenio"
+author: "Sebastián Cano"
+date: "9 de febrero de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, error = FALSE, message = FALSE)
+library(knitr)
+library(lmtest)
+library(sandwich)
+library(gmodels)
+library(dummies)
+library(dplyr)
+library(tab)
+
+
+load("../explore/cv_resultados.RData") 
+source("../explore/intervalos_convenio.R")
+
+```
+
+### Metodología
+
+De la base de los 5000 expedientes se tomaron aquellos casos que terminaron en convenio (3165) y se obtuvieron los coeficientes del modelo elegido para el Módulo de Conciliación. De la base reducida, se partió aleatoriamente en base de entrenamiento (50%) y base de prueba (50%). Con la base de entrenamiento, se utilizaron los coeficientes obtenidos anteriormente para calcular los días de salario obtenidos en el convenio. Dichos resultados fueron ubicados en la distribución real de días de salario obtenidos en convenio pero de la base de prueba (el otro 50%). Este procedimiento se realizó mil veces.
+
+## Modelo liquidación total en convenio
+```{r}
+reg_0 <- filter(df_exp2, modo_termino==1) %>%  
+          glm(liq_total_tope ~  c_antiguedad + hextra + sueldo + rec20 + c_indem + 
+          gen+ top_dem + giro_empresa00 + giro_empresa22+ giro_empresa31 + giro_empresa32 +
+          giro_empresa33 + giro_empresa43 + giro_empresa46 + giro_empresa48 + giro_empresa49 +
+          giro_empresa51 + giro_empresa52 + giro_empresa53 + giro_empresa54 + giro_empresa55 +
+          giro_empresa56 + giro_empresa61 + giro_empresa62 + giro_empresa71 + giro_empresa72  , data=.)
+kable(tabglm(reg_0))
+```
+```{r}
+N <- length(reg_0$y)
+R2 <- 1-reg_0$deviance/reg_0$null.deviance
+F.stat <- ((reg_0$null.deviance-reg_0$deviance)/(length(reg_0$coefficients)-1))/((reg_0$deviance)/(length(reg_0$y)-length(reg_0$coefficients)))
+stats <- cbind(N, R2, F.stat)
+kable(stats, digits = 4)
+```
+
+Valores p bajo heterocedasticidad
+```{r}
+kable(t(coeftest(reg_0, vcov = vcovHC(reg_0, "HC1")) [, 4]), digits = 2, align='l')
+```
+
+Primero, se utilizó como "pivote" la mediana y simétricamente calculamos los intervalos para poder capturar el 75% de la distribución. Los resultados que se presentan son los promedios de los resultados obtenidos en cada una de mil las realizaciones. El resultado "porcentaje_intervalo" es el porcentaje promedio de los datos entrenados que caen dentro del intervalo de la distribución de prueba. 
+
+```{r}
+sapply(cvi_1, mean)
+```
+
+Al ver que el tamaño del intervalo era demasiado grande (más de 120 días de salario), se decidió ajustar de tal forma que el "pivote" siguiera siendo la mediana pero al calcular simétricamente los intervalos se capturara el 67% de la distrbución.
+
+```{r}
+sapply(cvi_2, mean)
+```
+
+Actualización 10 de febrero 2017: se probó con intervalo de captura de distribución de 60%, 55% y 51% 
+
+### 60%
+```{r}
+sapply(cvi_3, mean)
+```
+
+### 55%
+```{r}
+sapply(cvi_4, mean)
+```
+
+### 51%
+```{r}
+sapply(cvi_5, mean)
+```
