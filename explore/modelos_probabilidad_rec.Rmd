@@ -1,0 +1,73 @@
+---
+title: "Calibración de Random Forest para Modelos de Probabilidad"
+author: "Mónica Zamudio"
+date: "14 de marzo de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(dplyr)
+library(e1071)
+library(unbalanced)
+library(randomForest)
+library(FNN)
+```
+
+```{r, echo = F}
+df_laudo <- readRDS('../clean_data/observaciones_selected_laudos.RDS') %>% 
+  select(-modo_termino) 
+
+df_laudo %>%
+select(starts_with('giro')) %>%
+sapply(sum) -> giros
+
+quita <- giros[giros < 10] %>% names()
+df_laudo <- df_laudo %>%
+            mutate(giro_empresa_00 = rowSums(df_laudo[names(df_laudo) %in% quita])) %>%
+            select(-one_of(quita[-1]))
+```
+
+Usamos la metodología *SMOTE* para tener un dataset balanceado (vamos a sobrerrepresentar algunos casos ganadores y subrepresentar algunos casos perdedores):
+
+```{r, echo = F}
+df_laudo %>%
+  select(-laudo_gana) %>%
+  ubSMOTE(., df_laudo$laudo_gana, perc.over = 200, k = 5, 
+  perc.under = 200, verbose = TRUE) -> listas
+
+X <- listas$X %>% na.roughfix()
+Y <- listas$Y %>% na.roughfix()
+```
+
+Calibramos el Random Forest:
+
+```{r}
+set.seed(140693)
+smp_size <- floor(0.80 * nrow(X))
+train_ind <- sample(seq_len(nrow(X)), size = smp_size, replace = FALSE)
+X_train <- X[train_ind, ]
+X_test  <- X[-train_ind, ]
+Y_train <- Y[train_ind]
+Y_test  <- Y[-train_ind]
+```
+
+```{r}
+RF <- tune.randomForest(X_train, Y_train, ntree = c(900, 1000, 1100, 1200, 1300, 1400, 1500))
+summary(RF)
+```
+
+Ahora, usamos el conjunto de prueba para comprobar el la capacidad de generalización de nuestro modelo:
+```{r}
+RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
+prediccion_RF <- predict(RF_best, X_test)
+
+length(which(prediccion_RF != Y_test))/length(Y_test)
+```
+
+Tomemos la lista de variables que usa el RF:
+```{r}
+names(X)
+```
+

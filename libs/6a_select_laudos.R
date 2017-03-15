@@ -14,7 +14,6 @@ clases <- sapply(df_laudo, class)
 factores <- clases[clases == 'factor'] %>% names()
 
 # Jalamos excepciones principales
-
 renuncia_voluntaria <- function(x){
   x == '3'
 }
@@ -24,17 +23,22 @@ df_ep <- read_excel('../data/laudos_excepcion_principal.xlsx') %>%
   select(-exp, -anio, -junta) %>%
   mutate_at(vars(starts_with('excepcion')), renuncia_voluntaria)
 
-df_ep %>% 
+
+df_ep$renuncia_voluntaria <- df_ep %>% 
   select(starts_with('excepcion')) %>%
-  rowSums(., na.rm = T) -> df_ep$renuncia_voluntaria
+  rowSums(., na.rm = T)>0 
+
+df_ep$renuncia_voluntaria <- as.numeric(df_ep$renuncia_voluntaria)
 
 # Volvemos todas numéricas
 
 df_laudo <- df_laudo %>%
             mutate_each(funs(factor2num), one_of(factores)) %>%
-            mutate(laudo_gana = as.factor(as.numeric(laudo_gana))) %>%
+            mutate(laudo_gana = as.factor(as.numeric(laudo_gana)),
+                   hextra_sem = as.numeric(hextra_sem)) %>%
             right_join(df_ep) %>%
-            select(-starts_with('excepcion')) %>%
-            !is.na(modo_termino)
+            select(-starts_with('excepcion'),
+                   -nombre_actor, -id_exp) %>%
+            filter(!is.na(modo_termino))
 
 saveRDS(df_laudo, '../clean_data/observaciones_selected_laudos.RDS') 
