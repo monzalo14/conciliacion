@@ -2,7 +2,7 @@
 
 df <- readRDS('../clean_data/observaciones_expandido.RDS')
 
-control_vars <- c("id_exp","exp", "anio")
+control_vars <- c("id_exp","exp", "anio", "nombre_ac")
 label_vars <- c("modo_termino", "liq_total") 
 
 train_vars <- c("reclutamiento",
@@ -34,10 +34,10 @@ vars_joyce <- c('sueldo',
 
 #probabilidad de ganar: multiplicar por x<1 en caso de carta de renuncia
 
- df %>% select(one_of(train_vars), 
+df %>% select(one_of(train_vars), 
+              one_of(control_vars),
                 one_of(vars_joyce), 
                 starts_with('giro'),
-                starts_with('junta'),
-                starts_with('ln')) %>%
+                starts_with('junta')) %>%
                 saveRDS(., '../clean_data/observaciones_selected.RDS')
 rm(list=ls())

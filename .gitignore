@@ -107,6 +107,8 @@ ENV/
 **/*.rds
 **/*.RDS
 **/*.dbf
+**/*.xls
+**/*.xlsx
 
 # Example code in package build process
 *-Ex.R
