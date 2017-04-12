@@ -12,7 +12,10 @@ library(dplyr)
 library(e1071)
 library(unbalanced)
 library(randomForest)
-library(FNN)
+library(stringr)
+library(stringdist)
+library(kimisc)
+library(readxl)
 ```
 
 ```{r, echo = F}
@@ -32,6 +35,7 @@ df_laudo <- df_laudo %>%
 Usamos la metodología *SMOTE* para tener un dataset balanceado (vamos a sobrerrepresentar algunos casos ganadores y subrepresentar algunos casos perdedores):
 
 ```{r, echo = F}
+set.seed(140693)
 df_laudo %>%
   select(-laudo_gana) %>%
   ubSMOTE(., df_laudo$laudo_gana, perc.over = 200, k = 5, 
@@ -39,9 +43,18 @@ df_laudo %>%
 
 X <- listas$X %>% na.roughfix()
 Y <- listas$Y %>% na.roughfix()
+
+set.seed(140693)
+df_laudo %>%
+  select(-laudo_gana, -renuncia_voluntaria) %>%
+  ubSMOTE(., df_laudo$laudo_gana, perc.over = 200, k = 5, 
+  perc.under = 200, verbose = TRUE) -> listas_rm
+
+X_rm <- listas_rm$X %>% na.roughfix()
+Y_rm <- listas_rm$Y %>% na.roughfix()
 ```
 
-Calibramos el Random Forest:
+Dividimos la muestra expandida en dos poblaciones: entrenamiento y prueba.
 
 ```{r}
 set.seed(140693)
@@ -51,23 +64,174 @@ X_train <- X[train_ind, ]
 X_test  <- X[-train_ind, ]
 Y_train <- Y[train_ind]
 Y_test  <- Y[-train_ind]
+
+X_rm_train <- X_rm[train_ind, ]
+X_rm_test  <- X_rm[-train_ind, ]
 ```
 
+Calibramos dos Random Forest, uno con la variable de renuncia voluntaria y otro sin la variable.
+
 ```{r}
+set.seed(142093)
 RF <- tune.randomForest(X_train, Y_train, ntree = c(900, 1000, 1100, 1200, 1300, 1400, 1500))
 summary(RF)
 ```
 
-Ahora, usamos el conjunto de prueba para comprobar el la capacidad de generalización de nuestro modelo:
 ```{r}
-RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
-prediccion_RF <- predict(RF_best, X_test)
-
-length(which(prediccion_RF != Y_test))/length(Y_test)
+set.seed(142093)
+RF_rm <- tune.randomForest(X_rm_train, Y_train, ntree = c(900, 1000, 1100, 1200, 1300, 1400, 1500))
+summary(RF_rm)
 ```
 
-Tomemos la lista de variables que usa el RF:
+Ahora, usamos el conjunto de prueba para comprobar la capacidad de generalización de nuestros modelos:
+```{r}
+set.seed(140693)
+RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
+prediccion_RF <- predict(RF_best, X_test)
+set.seed(140693)
+RF_rm_best <- randomForest(X_rm_train, Y_train, ntree = RF_rm$best.parameters[[1]])
+prediccion_RF_rm <- predict(RF_rm_best, X_rm_test)
+```
+
+## Comparación entre modelos
+
+De entrada, notemos que la variable de renuncia voluntaria es importante para la precisión del modelo; al no incluirla, nuestra tasa de error es de `r length(which(prediccion_RF_rm != Y_test))/length(Y_test)`, mientras que al incluirla baja a `r length(which(prediccion_RF != Y_test))/length(Y_test)`.
+
+Vamos a probar cómo cambian las predicciones, dependiendo de si incluímos o no esta variable.
+
+```{r, echo = F}
+df_pred <- df_laudo %>%
+          select(one_of(names(X))) %>%
+          na.roughfix()
+prediccion_RF_probs <- predict(RF_best, df_pred, 'prob')
+prediccion_RF_rm_probs <- predict(RF_rm_best, df_pred, 'prob')
+preds <- cbind(prediccion_RF_probs, prediccion_RF_rm_probs) %>% 
+          as.data.frame() 
+names(preds) <- c('XO', 'X1', 'X0_rm', 'X1_rm')
+preds <- preds %>% 
+        mutate(update = X1 - X1_rm)
+```
+
+Después de predecir, generé la variable **update**, que es la resta de la predicción con la variable y la predicción sin la variable. Es decir, si **update** es negativa, eso significa que nuestra predicción baja cuando agregamos la variable de renuncia voluntaria.
+
+La distribución de update se ve así:
+
+```{r}
+summary(preds$update)
+```
+
+Para el global de los casos, tenemos `r sum(preds$update < 0)` casos en los que el update es negativo (el `r sum(preds$update < 0)/nrow(preds)*100`%  de las observaciones). Condicionando a renuncia voluntaria, tenemos `r sum(preds$update[df_laudo$renuncia_voluntaria == 1] < 0)` casos para los que el update es negativo, que constituyen el `r sum(preds$update[df_laudo$renuncia_voluntaria == 1] < 0)/length(preds$update[df_laudo$renuncia_voluntaria == 1])*100`% de las observaciones.
+
+Condicionando a renuncia voluntaria, la distribución de updates se ve así:
+
+```{r}
+summary(preds$update[df_laudo$renuncia_voluntaria == 1])
+```
+
+
+He estado pensando un poco, y hay varias cosas que creo debemos tomar en cuenta al ver estos resultados: 
+
+- El Random Forest va a promediar `r RF_rm_best$ntree` y `r RF_best$ntree` árboles, calibrándolo con y sin la variable de renuncia voluntaria. Estos árboles que están construidos tomando aleatoriamente un subconjunto de las variables, para evitar que estos estén correlacionados. 
+
+- De entrada, tenemos sólo `r sum(df_laudo$renuncia_voluntaria == 1)` laudos donde la excepción principal es renuncia voluntaria. Además, la poca variabilidad que tiene puede reducirse aún más en la calibración por las siguientes razones:
+
+  1. Al dividir en grupo de entrenamiento y prueba, podemos habernos deshecho de varios 1s.
+  
+  2. El algoritmo de calibración de un Random Forest hace 10-fold Cross-Validation.
+  
+  3. Si no fue la primera variable que hizo un cutoff en la muestra, renuncia voluntaria puede ser un cutoff para partir una rama, pero ya condicionando a todas las divisiones anteriores. Es decir, la manera en que interactúa esa variable en los modelos, dada su poca variabilidad y nuestro reducido número de observaciones, puede bien ser llevada por factores idiosincráticos de un grupo pequeño de laudos.
+
+- Por último, las interacciones entre estas variables al calibrar un Random Forest son altamente no lineales, por lo que es difícil relacionar las variables de forma intuitiva cuando hablamos de al menos 900 iteraciones de un árbol de decisión.
+
+Finalmente, va de nuevo la lista de variables que usa el RF:
 ```{r}
 names(X)
+```
+
+## Estadística descriptiva
+
+```{r, include = F, warning = F, echo = F}
+factor2num <- function(x){as.numeric(as.character(x))}
+
+# Leemos los datos, filtramos para laudos y creamos la dummy de gana/pierde
+
+df_laudo <- readRDS('../clean_data/observaciones_selected.RDS') %>% 
+  filter(modo_termino == 3) %>% 
+  mutate(laudo_gana = liq_total>0) %>%
+  select(-exp, -anio) %>%
+  rename(nombre_actor = nombre_ac)
+
+clases <- sapply(df_laudo, class)
+factores <- clases[clases == 'factor'] %>% names()
+
+# Jalamos excepciones principales
+renuncia_voluntaria <- function(x){
+  x == '3'
+}
+
+df_ep <- read_excel('../data/laudos_excepcion_principal.xlsx') %>% 
+  filter(row_number() > 2) %>%
+  select(-exp, -anio, -junta) %>%
+  mutate_at(vars(starts_with('excepcion')), renuncia_voluntaria)
+
+
+df_ep$renuncia_voluntaria <- df_ep %>% 
+  select(starts_with('excepcion')) %>%
+  rowSums(., na.rm = T)>0 
+
+df_ep$renuncia_voluntaria <- as.numeric(df_ep$renuncia_voluntaria)
+
+# Volvemos todas numéricas
+
+df_laudo <- df_laudo %>%
+  mutate_each(funs(factor2num), one_of(factores)) %>%
+  mutate(laudo_gana = as.factor(as.numeric(laudo_gana))) %>%
+  right_join(df_ep) %>%
+  select(-starts_with('excepcion'),
+         -nombre_actor, -id_exp) %>%
+  filter(!is.na(modo_termino))
+```
+
+### Distribución de liquidación total
+
+#### Población total, condicionado a ganar algo positivo
+
+(N.Obs.: `r df_laudo %>% filter(laudo_gana == 1) %>% nrow()`)
+
+```{r}
+df_laudo %>%
+  filter(laudo_gana == 1) %>%
+  select(liq_total) %>% 
+  summary()
+```
+
+#### Población de renuncia voluntaria, condicionado a ganar algo positivo
+
+(N.Obs.: `r df_laudo %>% filter(laudo_gana == 1, renuncia_voluntaria == 1) %>% nrow()`)
+
+```{r}
+df_laudo %>%
+  filter(laudo_gana == 1, renuncia_voluntaria == 1) %>%
+  select(liq_total) %>% 
+  summary()
+```
+
+### Distribución de casos ganadores/perdedores 
+
+#### Población total
+
+```{r}
+df_laudo %>%
+  group_by(laudo_gana) %>%
+  summarise(freq = n()/nrow(.))
+```
+
+#### Población de renuncia voluntaria
+
+```{r}
+df_laudo %>%
+  filter(renuncia_voluntaria == 1) %>%
+  group_by(laudo_gana) %>%
+  summarise(freq = n()/nrow(.))
 ```
 
