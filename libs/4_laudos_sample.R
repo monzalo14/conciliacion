@@ -9,4 +9,4 @@ df_laudo <- df_laudo %>%
             mutate(hextra_sem = as.numeric(hextra_sem)) %>%
             select(-nombre_actor, -id_exp)
 
-saveRDS(df_laudo, '../clean_data/observaciones_selected_laudos.RDS')
+saveRDS(df_laudo, '../clean_data/sample_selected_laudos.RDS')
