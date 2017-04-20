@@ -20,7 +20,7 @@ library(readxl)
 
 ```{r, echo = F}
 df_laudo <- readRDS('../clean_data/observaciones_selected_laudos.RDS') %>% 
-  select(-modo_termino, -starts_with('junta'), -codem, -c_sal_caidos) 
+  select(-modo_termino, -starts_with('junta'), -codem, -c_sal_caidos, -sueldo) 
 
 df_laudo %>%
 select(starts_with('giro')) %>%
