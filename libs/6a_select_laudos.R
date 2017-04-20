@@ -8,7 +8,7 @@ df_laudo <- readRDS('../clean_data/observaciones_selected.RDS') %>%
             filter(modo_termino == 3) %>% 
             mutate(laudo_gana = liq_total>0) %>%
             select(-liq_total, -exp, -anio) %>%
-            rename(nombre_actor = nombre_ac)
+            dplyr::rename(nombre_actor = nombre_ac)
 
 clases <- sapply(df_laudo, class)
 factores <- clases[clases == 'factor'] %>% names()
