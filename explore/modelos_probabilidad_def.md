@@ -52,19 +52,19 @@ summary(RF)
 ## 
 ## - best parameters:
 ##  ntree
-##   1000
+##   1300
 ## 
-## - best performance: 0.1769841 
+## - best performance: 0.1806878 
 ## 
 ## - Detailed performance results:
 ##   ntree     error dispersion
-## 1   900 0.1880952 0.05318053
-## 2  1000 0.1769841 0.04801666
-## 3  1100 0.1916667 0.05889322
-## 4  1200 0.1880952 0.05318053
-## 5  1300 0.1880952 0.04374555
-## 6  1400 0.1955026 0.04593078
-## 7  1500 0.1880952 0.05318053
+## 1   900 0.1955026 0.04248300
+## 2  1000 0.1880952 0.07044139
+## 3  1100 0.1843915 0.05999131
+## 4  1200 0.1917989 0.06682477
+## 5  1300 0.1806878 0.04359598
+## 6  1400 0.1955026 0.06275848
+## 7  1500 0.1806878 0.05852151
 ```
 
 Ahora, usamos el conjunto de prueba para comprobar la capacidad de generalización de nuestro modelo:
@@ -75,7 +75,7 @@ RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
 prediccion_RF <- predict(RF_best, X_test)
 ```
 
-Para este modelo, tenemos entonces una tasa de error de 0.1764706%.
+Para este modelo, tenemos entonces una tasa de error de 0.1617647%.
 
 Va la lista de variables que usa el RF:
 
@@ -92,7 +92,7 @@ names(X)
 ## [16] "giro_empresa31"      "giro_empresa43"      "giro_empresa46"     
 ## [19] "giro_empresa52"      "giro_empresa54"      "giro_empresa56"     
 ## [22] "giro_empresa61"      "giro_empresa62"      "giro_empresa72"     
-## [25] "giro_empresa81"      "renuncia_voluntaria" "giro_empresa_00"
+## [25] "giro_empresa81"      "renuncia_voluntaria"
 ```
 
 ```r

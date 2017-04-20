@@ -29,7 +29,9 @@ sapply(sum) -> giros
 quita <- giros[giros < 10] %>% names()
 df_laudo <- df_laudo %>%
             mutate(giro_empresa_00 = rowSums(df_laudo[names(df_laudo) %in% quita])) %>%
-            select(-one_of(quita[-1]))
+            select(-one_of(quita[-1])) %>%
+			mutate(giro_empresa00 = ifelse(giro_empresa00 == 1 | giro_empresa_00 == 1, 1, 0)) %>%
+      select(-giro_empresa_00)
 ```
 
 Usamos la metodología *SMOTE* para tener un dataset balanceado (vamos a sobrerrepresentar algunos casos ganadores y subrepresentar algunos casos perdedores):
