@@ -75,7 +75,7 @@ RF_best <- randomForest(X_train, Y_train, ntree = RF$best.parameters[[1]])
 prediccion_RF <- predict(RF_best, X_test)
 ```
 
-Para este modelo, tenemos entonces una tasa de error de 1617647%.
+Para este modelo, tenemos entonces una tasa de error de 16.17647%.
 
 Va la lista de variables que usa el RF:
 
