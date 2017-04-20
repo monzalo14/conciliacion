@@ -5,9 +5,17 @@ library(lmtest)
 library(gmodels)
 library(sandwich)
 
-base <- readRDS("../clean_data/observaciones.RDS")
+base <- readRDS("../clean_data/sample.RDS")
 
-base_exp <- base
+dems <- base %>%
+        select(starts_with(nombre_d), -nombre_despido, id_exp) %>%
+        gather(key = numero, value = nombre, -id_exp) 
+
+razones <- list(
+'WALMART' = 'WALMART'
+'WAL MART' = 'WALMART'
+'SUMESA' = 'COMER'
+)
 
 # Englobamos los nombres de ciertas empresas con varias razones sociales. 
 for (i in match(names(dplyr::select(base_exp, starts_with("nombre_d"), -nombre_despido)), names(base_exp))){
@@ -47,6 +55,7 @@ nombres_dems$value[nombres_dems$value==""]<- NA
 nombres_dems$value[union(grep("AGUIRRE", nombres_dems$value),grep("KUTZ", nombres_dems$value))] <- NA
 nombres_dems$value[union(grep("ESCARPITA", nombres_dems$value),grep("ISAIAS", nombres_dems$value))] <- NA
 
+
 # Variable top_dem
 demandados <- plyr::count(nombres_dems$value) %>% mutate(., x=as.character(x)) 
 
@@ -71,7 +80,6 @@ base_exp$top_dem[base_exp$top_dem>1] <- 1
 # Dummy antigüedad mayor a 15 años
 
 base_exp$prima_antig <- as.numeric(as.character(base_exp$prima_antig))
-
 base_exp$antig_15 <- ifelse(base_exp$c_antiguedad>15, 1, 0)
 
 ###########################################################################################
@@ -90,39 +98,38 @@ quita_negativos <- function(x){
 df_exp <- group_by(base_exp, modo_termino) %>% 
   mutate_each(funs(trunca99), liq_total, liq_total_tope, starts_with("c_")) %>%
   data.frame(.) %>%
-  dummy.data.frame(names=c("junta", "giro_empresa")) %>%
+  dummy.data.frame(names=c("junta")) %>%
   mutate_each(., funs(quita_negativos), starts_with("c_"))
 
-logs <- c("liq_total", "c_antiguedad", "c_indem", "liq_total_tope", "sueldo")
+logs <- c("c_antiguedad", "c_indem")
 suma <- function(x){x+1}
 
 df_exp2 <- mutate_each(df_exp, funs(suma), one_of(logs)) %>%
-  mutate(., ln_liq_total = log(liq_total),
-         ln_c_antiguedad = log(c_antiguedad),
-         ln_c_indem = log(c_indem),
-         ln_liq_total_tope = log(liq_total_tope),
-         ln_sueldo = log(sueldo))
+  mutate(., ln_c_antiguedad = log(c_antiguedad),
+         ln_c_indem = log(c_indem))
 
 # Modificación 25/01/2017: para utilizarlos en el modelo de laudo, se agrupan a un dígito los giros de empresa
 # 3, 4, 5, 6, 7, 8
 
-df_exp2$giro_3 <- df_exp2$giro_empresa31 + df_exp2$giro_empresa32 + df_exp2$giro_empresa33
-df_exp2$giro_3[df_exp2$giro_3>0] <- 1
 
-df_exp2$giro_4 <- df_exp2$giro_empresa43 + df_exp2$giro_empresa46 + df_exp2$giro_empresa48 +df_exp2$giro_empresa49
-df_exp2$giro_4[df_exp2$giro_4>0] <- 1
 
-df_exp2$giro_5 <- df_exp2$giro_empresa51 + df_exp2$giro_empresa52 + df_exp2$giro_empresa53 +
-                  df_exp2$giro_empresa54 + df_exp2$giro_empresa55 + df_exp2$giro_empresa56
-df_exp2$giro_5[df_exp2$giro_5>0] <- 1
+# df_exp2$giro_3 <- df_exp2$giro_empresa31 + df_exp2$giro_empresa32 + df_exp2$giro_empresa33
+# df_exp2$giro_3[df_exp2$giro_3>0] <- 1
 
-df_exp2$giro_6 <- df_exp2$giro_empresa61 + df_exp2$giro_empresa62 + df_exp2$giro_empresa64 
-df_exp2$giro_6[df_exp2$giro_6>0] <- 1
+# df_exp2$giro_4 <- df_exp2$giro_empresa43 + df_exp2$giro_empresa46 + df_exp2$giro_empresa48 +df_exp2$giro_empresa49
+# df_exp2$giro_4[df_exp2$giro_4>0] <- 1
 
-df_exp2$giro_7 <- df_exp2$giro_empresa71 + df_exp2$giro_empresa72
-df_exp2$giro_7[df_exp2$giro_7>0] <- 1
+# df_exp2$giro_5 <- df_exp2$giro_empresa51 + df_exp2$giro_empresa52 + df_exp2$giro_empresa53 +
+#                   df_exp2$giro_empresa54 + df_exp2$giro_empresa55 + df_exp2$giro_empresa56
+# df_exp2$giro_5[df_exp2$giro_5>0] <- 1
 
-df_exp2$giro_8 <- df_exp2$giro_empresa81 
-df_exp2$giro_8[df_exp2$giro_8>0] <- 1
+# df_exp2$giro_6 <- df_exp2$giro_empresa61 + df_exp2$giro_empresa62 + df_exp2$giro_empresa64 
+# df_exp2$giro_6[df_exp2$giro_6>0] <- 1
+
+# df_exp2$giro_7 <- df_exp2$giro_empresa71 + df_exp2$giro_empresa72
+# df_exp2$giro_7[df_exp2$giro_7>0] <- 1
+
+# df_exp2$giro_8 <- df_exp2$giro_empresa81 
+# df_exp2$giro_8[df_exp2$giro_8>0] <- 1
 
 saveRDS(df_exp2, "../clean_data/sample_added.RDS")
