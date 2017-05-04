@@ -1,5 +1,5 @@
 ea <- readRDS("../data/enoe_ampliado_hogares.rds")
-sd <- readRDS("../data/sdem_hogares.rds") %>% dplyr::select(-ingocup)
+sd <- readRDS("../data/sdem_hogares.rds") %>% ungroup() %>% select(., -ingocup)
 
 hogares <- dplyr::inner_join(
   ea, sd,
@@ -7,6 +7,3 @@ hogares <- dplyr::inner_join(
 )
 
 saveRDS(hogares, "../data/enoe_hogares.rds")
-
-
-names(df)

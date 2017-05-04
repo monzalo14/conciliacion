@@ -1,0 +1,101 @@
+---
+title: "Despidos a mujeres"
+author: "Mónica Zamudio"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source('00_setup.R')
+
+codes <- list(
+'01' = 'Conflicto laboral y/o sindical',
+'02' = 'Conflicto con su jefe o superior',
+'03' = 'Falta de calificación o capacitación',
+'04' = 'Ya no hubo más trabajo',
+'05' = 'Incumplimiento con la empresa',
+'06' = 'Discriminación por su aspecto físico',
+'07' = 'La edad (joven o viejo)',
+'08' =  'Enfermedad o discapacidad',
+'09' = 'Embarazo y/o responsabilidades maternas',
+'10' = 'Ninguno de los anteriores',
+'99' = 'No sabe'
+)
+
+get_code <- function(x){
+  ifelse(is.null(codes[[x]]), 
+         NA, 
+         codes[[x]])
+  }
+
+decode <- function(x){
+  sapply(x, get_code) %>%
+    unlist() %>%
+    unname()
+}
+```
+
+Este documento es un cálculo simple de la distribución de condiciones de despido en mujeres.
+
+Primero, leemos los datos, filtramos encuestas que no se terminaron y personas menores a 12 años. Juntamos variables sociodemográficas con variables sobre ocupación y empleo en una sola tabla.
+
+```{r}
+part2 <- dir("../data", 
+             pattern = "coe2t1.*\\.dbf$", 
+             full.names = TRUE, 
+             recursive = T)
+
+sdem <- dir("../data", 
+            pattern = "sdemt1.*\\.dbf$", 
+            full.names = TRUE, 
+            recursive = T)
+
+eda_filter <- c(paste0('0', 0:9),
+                '10', '11')
+
+key_vars <- c('CD_A',
+              'ENT',
+              'CON',
+              'V_SEL',
+              'N_HOG',
+              'H_MUD',
+              'N_REN')
+
+sdem_df <- read.dbf(sdem) %>% 
+  filter(R_DEF == '00',
+         C_RES != '2',
+         !(EDA %in% eda_filter)) %>%
+  select(one_of(key_vars), SEX)
+
+df <- read.dbf(part2) %>% 
+  select(one_of(key_vars),
+         FAC, P9B, P9C) %>%
+  right_join(sdem_df)
+
+```
+
+La tabla de encuesta de variables sociodemográficas contiene factores de expansión. Vamos a tomar a todas  las mujeres que declararon ser despedidas en la última ocasión que se separaron de un empleo, y revisar las razones del despido. 
+
+Ahora, los factores de expansión, para esta encuesta, ya representan la cuenta de personas del total de la población (asumo que nacional) que cada una de las observaciones representa. 
+Así, para tener un estimador insesgado de la proporción de mujeres en cada categoría se suman los factores de expansión de cada renglón. 
+
+*Para más información, consultar [aquí](http://www.beta.inegi.org.mx/contenidos/proyectos/enchogares/regulares/enoe/doc/con_basedatos_proy2010.pdf)*
+
+
+
+```{r}
+df %>%
+  filter(P9B == '6',
+         SEX == '2') %>%
+  group_by(P9C) %>%
+  summarise(freq = sum(FAC)) %>%
+  mutate(freq = freq*100/sum(freq),
+         P9C = decode(P9C)) %>%
+  kable(digits = 2, 
+        col.names = c('Razón', 'Porcentaje'),
+        justify = 'centre',
+        padding = 0)
+```
+
+
+

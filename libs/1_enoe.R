@@ -11,8 +11,9 @@ fac2chr <- function(x){as.character(x)}
 
 hogs_df <- read.dbf(hogs)
 sdem_df <- read.dbf(sdem)
+part1_df <- read.dbf(part1)
+part2_df <- read.dbf(part2)
 
-names(part1_df)
 
 df.all <- NULL
 df.h.all <- NULL

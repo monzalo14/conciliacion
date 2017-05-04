@@ -11,7 +11,7 @@ df.hogar <- data.frame(df) %>%
     #    , ingreso.secun.aux = ifelse(is.na(ingreso.secun), 1, 0)
     #    , ingreso.secun.efectivo.aux = ifelse(is.na(ingreso.secun.efectivo), 1, 0)
   ) %>%
-  dplyr::group_by(cd_a, ent, con, v_sel, n_hog, h_mud, upm, fac, ent, per, upm_14, t_loc, est) #%>%
+  dplyr::group_by(cd_a, ent, con, v_sel, n_hog, h_mud, upm, fac, ent, per, t_loc, est) #%>%
 #dplyr::group_by(., folioh) 
 
 ## NOs aseguramos que la cuenta de NAs /que tanto problema causo/ sea correcta
